@@ -1,0 +1,20 @@
+{
+  "name": "grb2tojson",
+  "version": "1.0.0",
+  "description": "將 GRIB2 格式的風場資料轉換為 JSON 格式的工具",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [
+    "grib2",
+    "weather",
+    "wind",
+    "json",
+    "converter"
+  ],
+  "author": "",
+  "license": "MIT"
+}
+
