@@ -2,6 +2,8 @@
 
 將中央氣象局（CWA）提供的 GRIB2 格式風場資料轉換為 JSON 格式的工具。
 
+**注意：** 目前工具僅測試支援 WRF3km 資料（Lambert Conformal 投影）。
+
 ## 功能
 
 - 將 `.grb2` 檔案解析為完整的 JSON 資料（`source.json`）
@@ -77,7 +79,7 @@ node index.js M-A0064-084.grb2
 
 執行後會在當前目錄下產生兩個 JSON 檔案：
 - `source.json` - 完整的原始解析資料（約數百 MB）
-- `wind.json` - maplibre-wind 可用的格式（約數百 MB）
+- `wind-YYYYMMDD.json` - maplibre-wind 可用的格式（約數百 MB），檔案名稱會自動包含資料日期（例如：`wind-20251114.json`）
 
 ### 執行過程說明
 
@@ -108,12 +110,15 @@ node index.js M-A0064-084.grb2
 
 ✓ 成功提取所有必要欄位：
   - 網格大小：1158 x 673
+  - 投影類型：Lambert Conformal
   - 起始位置：經度 105.25°, 緯度 14.02224°
-  - 網格間距：dx=0.027°, dy=0.027°
+  - 中央子午線：120.0°
+  - 標準緯線：10.0°, 40.0°
+  - 網格間距：dx=3000.0 m, dy=3000.0 m
   - U 分量資料點：779334
   - V 分量資料點：779334
 
-✓ 已生成 wind.json
+✓ 已生成 wind-20251114.json
 
 轉換完成！
 ```
@@ -130,7 +135,30 @@ node index.js M-A0064-084.grb2
 - 完整的 metadata
 
 ### wind.json
-轉換為 `@sakitam-gis/maplibre-wind` 套件可用的格式：
+轉換為 `@sakitam-gis/maplibre-wind` 套件可用的格式。
+
+**對於 WRF3km 資料（Lambert Conformal 投影）：**
+```json
+{
+  "projection": {
+    "type": "lambert-conformal",
+    "lo1": 105.25,
+    "la1": 14.02224,
+    "lov": 120.0,
+    "latin1": 10.0,
+    "latin2": 40.0,
+    "dx": 3000.0,
+    "dy": 3000.0,
+    "date": "20251114"
+  },
+  "nx": 1158,
+  "ny": 673,
+  "u": [1.2, 2.3, ...],
+  "v": [0.5, 1.1, ...]
+}
+```
+
+**對於 lat-lon 網格（向後兼容）：**
 ```json
 {
   "dx": 1.0,
@@ -169,17 +197,46 @@ node index.js M-A0064-084.grb2
    - lat-lon 網格：從 `lat 90.000000 to -90.000000` 中提取起始值
    - Lambert Conformal：從 `Lat1 14.022240` 中提取
 
-5. **`dx`** - X 方向的網格間距（度）
-   - lat-lon 網格：計算公式 `dx = (lo2 - lo1) / (nx - 1)`
-   - Lambert Conformal：從 `Dx 3000.000000 m` 中提取並轉換為度（除以 111000，約 1 度 = 111 km）
+5. **`dx`** - X 方向的網格間距
+   - lat-lon 網格：計算公式 `dx = (lo2 - lo1) / (nx - 1)`（單位：度）
+   - Lambert Conformal：從 `Dx 3000.000000 m` 中提取，保留為米（不轉換為度）
 
-6. **`dy`** - Y 方向的網格間距（度）
-   - lat-lon 網格：計算公式 `dy = |la1 - la2| / (ny - 1)`
-   - Lambert Conformal：從 `Dy 3000.000000 m` 中提取並轉換為度
+6. **`dy`** - Y 方向的網格間距
+   - lat-lon 網格：計算公式 `dy = |la1 - la2| / (ny - 1)`（單位：度）
+   - Lambert Conformal：從 `Dy 3000.000000 m` 中提取，保留為米（不轉換為度）
+
+**Lambert Conformal 投影參數（僅適用於 WRF3km 資料）：**
+
+7. **`projection.type`** - 投影類型
+   - 固定為 `"lambert-conformal"`
+
+8. **`projection.lov`** - 中央子午線（度）
+   - 來源：從 `gridInfo` 中解析 `LoV 120.000000`
+   - 範例：`120.0`
+
+9. **`projection.latin1`** - 第一標準緯線（度）
+   - 來源：從 `gridInfo` 中解析 `Latin1 10.000000`
+   - 範例：`10.0`
+
+10. **`projection.latin2`** - 第二標準緯線（度）
+    - 來源：從 `gridInfo` 中解析 `Latin2 40.000000`
+    - 範例：`40.0`
+
+11. **`projection.dx`** - X 方向的網格間距（米）
+    - 來源：從 `gridInfo` 中解析 `Dx 3000.000000 m`
+    - 範例：`3000.0`（保留原始單位，不轉換為度）
+
+12. **`projection.dy`** - Y 方向的網格間距（米）
+    - 來源：從 `gridInfo` 中解析 `Dy 3000.000000 m`
+    - 範例：`3000.0`（保留原始單位，不轉換為度）
+
+13. **`projection.date`** - 資料日期（YYYYMMDD 格式）
+    - 來源：從 GRIB2 檔案的記錄中解析（格式：`d=2025111400`）
+    - 範例：`"20251114"`（表示 2025 年 11 月 14 日）
 
 **風速資料（從 GRIB2 檔案中的風速記錄提取）：**
 
-7. **`u`** - U 分量風速陣列（東西向風速）
+14. **`u`** - U 分量風速陣列（東西向風速）
    
    **物理意義：**
    - `u` 代表風的**東西向分量**（Zonal Wind Component）
@@ -204,7 +261,7 @@ node index.js M-A0064-084.grb2
    - `-2.28941` 表示第一個網格點的風速為向西 2.29 m/s
    - `-2.10518` 表示第二個網格點的風速為向西 2.11 m/s
 
-8. **`v`** - V 分量風速陣列（南北向風速）
+15. **`v`** - V 分量風速陣列（南北向風速）
    
    **物理意義：**
    - `v` 代表風的**南北向分量**（Meridional Wind Component）
@@ -268,8 +325,11 @@ GRIB2 檔案
 **技術細節：**
 
 - **網格解析**：支援兩種投影格式
-  - **lat-lon 網格**：標準經緯度網格，直接從範圍計算間距
-  - **Lambert Conformal**：Lambert 圓錐投影，需要將米轉換為度（近似值）
+  - **lat-lon 網格**：標準經緯度網格，直接從範圍計算間距（單位：度）
+  - **Lambert Conformal**：Lambert 圓錐投影（WRF3km 使用）
+    - 保留網格間距為米（`dx`、`dy` 以米為單位）
+    - 提取完整的投影參數：`lov`（中央子午線）、`latin1`、`latin2`（標準緯線）
+    - 前端可使用 proj4js 等投影庫進行精確的座標轉換
 
 - **風速資料提取**：
   - 優先提取 `10 m above ground` 的地面風速（最常用於可視化）

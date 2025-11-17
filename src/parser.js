@@ -86,39 +86,52 @@ function parseGridInfo(gridInfo) {
   }
   
   // 解析 Lambert Conformal 投影
-  // 格式範例：Lambert Conformal: (1158 x 673) Lat1 14.022240 Lon1 105.250000 Dx 3000.000000 m Dy 3000.000000 m
+  // 格式範例：Lambert Conformal: (1158 x 673) Lat1 14.022240 Lon1 105.250000 LoV 120.000000
+  //          LatD 10.000000 Latin1 10.000000 Latin2 40.000000
+  //          North Pole (1158 x 673) Dx 3000.000000 m Dy 3000.000000 m
   const lambertMatch = allLines.match(/Lambert Conformal:\s*\((\d+)\s*x\s*(\d+)\)/i);
   if (lambertMatch) {
     info.nx = parseInt(lambertMatch[1]);
     info.ny = parseInt(lambertMatch[2]);
     info.projection = 'lambert-conformal';
     
-    // 解析起始點（可能在下一行）
+    // 解析起始點
     const lat1Match = allLines.match(/Lat1\s+([\d.\-]+)/i);
     const lon1Match = allLines.match(/Lon1\s+([\d.\-]+)/i);
     if (lat1Match) info.la1 = parseFloat(lat1Match[1]);
     if (lon1Match) info.lo1 = parseFloat(lon1Match[1]);
     
-    // 解析網格間距（米）- 可能在 "North Pole" 行
+    // 解析投影參數：LoV（中央子午線）
+    const lovMatch = allLines.match(/LoV\s+([\d.\-]+)/i);
+    if (lovMatch) info.lov = parseFloat(lovMatch[1]);
+    
+    // 解析投影參數：Latin1（第一標準緯線）
+    const latin1Match = allLines.match(/Latin1\s+([\d.\-]+)/i);
+    if (latin1Match) info.latin1 = parseFloat(latin1Match[1]);
+    
+    // 解析投影參數：Latin2（第二標準緯線）
+    const latin2Match = allLines.match(/Latin2\s+([\d.\-]+)/i);
+    if (latin2Match) info.latin2 = parseFloat(latin2Match[1]);
+    
+    // 解析網格間距（米）- 保留為米，不要轉換為度
     const dxMatch = allLines.match(/Dx\s+([\d.]+)\s+m/i);
     const dyMatch = allLines.match(/Dy\s+([\d.]+)\s+m/i);
     if (dxMatch) {
-      // 將米轉換為度（近似值，1度約111km）
-      const dxMeters = parseFloat(dxMatch[1]);
-      info.dx = dxMeters / 111000; // 轉換為度
+      info.dx = parseFloat(dxMatch[1]); // 保留為米
     }
     if (dyMatch) {
-      const dyMeters = parseFloat(dyMatch[1]);
-      info.dy = dyMeters / 111000; // 轉換為度
+      info.dy = parseFloat(dyMatch[1]); // 保留為米
     }
     
-    // 對於 Lambert 投影，我們需要計算一個近似的經緯度範圍
-    // 使用起始點和網格大小來估算
+    // 對於 Lambert 投影，我們需要計算一個近似的經緯度範圍（用於顯示）
+    // 使用起始點和網格大小來估算（這裡使用近似轉換，僅用於顯示）
     if (info.lo1 !== undefined && info.dx !== undefined) {
-      info.lo2 = info.lo1 + (info.dx * (info.nx - 1));
+      const dxDegrees = info.dx / 111000; // 僅用於估算顯示範圍
+      info.lo2 = info.lo1 + (dxDegrees * (info.nx - 1));
     }
     if (info.la1 !== undefined && info.dy !== undefined) {
-      info.la2 = info.la1 - (info.dy * (info.ny - 1)); // 通常從北到南
+      const dyDegrees = info.dy / 111000; // 僅用於估算顯示範圍
+      info.la2 = info.la1 - (dyDegrees * (info.ny - 1)); // 通常從北到南
     }
   }
   
@@ -363,6 +376,16 @@ export async function parseGrib2(filePath) {
     console.log('提取風速分量...');
     const windComponents = await extractWindComponents(filePath);
     
+    // 從 recordsList 提取日期資訊（格式：d=2025111400）
+    let dataDate = null;
+    if (recordsList.length > 0) {
+      const firstRecord = recordsList[0];
+      const dateMatch = firstRecord.match(/d=(\d{8})\d{2}/);
+      if (dateMatch) {
+        dataDate = dateMatch[1]; // 提取 YYYYMMDD 格式的日期
+      }
+    }
+    
     // 組合所有資料
     const result = {
       file: filePath,
@@ -371,6 +394,7 @@ export async function parseGrib2(filePath) {
       recordsList: recordsList,
       records: jsonData,
       windComponents: windComponents,
+      dataDate: dataDate,
       metadata: {
         parsedAt: new Date().toISOString(),
         parser: 'wgrib2',

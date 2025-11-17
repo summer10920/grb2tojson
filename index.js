@@ -46,10 +46,16 @@ async function main() {
     // 轉換為 wind.json 格式
     const windData = convertToWindJson(sourceData);
     
+    // 根據日期生成檔案名稱
+    let windFileName = 'wind.json';
+    if (sourceData.dataDate) {
+      windFileName = `wind-${sourceData.dataDate}.json`;
+    }
+    
     // 儲存 wind.json
-    const windJsonPath = path.join(__dirname, 'wind.json');
+    const windJsonPath = path.join(__dirname, windFileName);
     fs.writeFileSync(windJsonPath, JSON.stringify(windData, null, 2));
-    console.log(`✓ 已生成 wind.json`);
+    console.log(`✓ 已生成 ${windFileName}`);
     
     console.log('\n轉換完成！');
   } catch (error) {

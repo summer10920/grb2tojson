@@ -4,6 +4,7 @@
 # 轉換後的 JSON 檔案（體積太大）
 source.json
 wind.json
+wind-*.json
 
 # 臨時檔案
 /tmp/wgrib2_*.txt
