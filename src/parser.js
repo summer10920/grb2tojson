@@ -376,14 +376,26 @@ export async function parseGrib2(filePath) {
     console.log('提取風速分量...');
     const windComponents = await extractWindComponents(filePath);
     
-    // 從 recordsList 提取日期資訊（格式：d=2025111400）
+    // 從 recordsList 提取日期資訊（格式：d=2025112418，包含小時）
     let dataDate = null;
     if (recordsList.length > 0) {
       const firstRecord = recordsList[0];
-      const dateMatch = firstRecord.match(/d=(\d{8})\d{2}/);
+      const dateMatch = firstRecord.match(/d=(\d{10})/);
       if (dateMatch) {
-        dataDate = dateMatch[1]; // 提取 YYYYMMDD 格式的日期
+        dataDate = dateMatch[1]; // 提取 YYYYMMDDHH 格式的日期（例如：2025112418）
       }
+    }
+    
+    // 從 recordsList 提取預報小時數（格式：84 hour fcst）
+    // 如果沒有找到 hour fcst，則設為 0（表示分析資料）
+    let forecastHour = 0;
+    if (recordsList.length > 0) {
+      const firstRecord = recordsList[0];
+      const fcstMatch = firstRecord.match(/(\d+)\s+hour\s+fcst/i);
+      if (fcstMatch) {
+        forecastHour = parseInt(fcstMatch[1]); // 提取預報小時數
+      }
+      // 如果沒有找到 hour fcst（例如：anl: 表示分析資料），forecastHour 保持為 0
     }
     
     // 組合所有資料
@@ -395,6 +407,7 @@ export async function parseGrib2(filePath) {
       records: jsonData,
       windComponents: windComponents,
       dataDate: dataDate,
+      forecastHour: forecastHour,
       metadata: {
         parsedAt: new Date().toISOString(),
         parser: 'wgrib2',

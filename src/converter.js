@@ -57,6 +57,11 @@ export function convertToWindJson(sourceData) {
       result.projection.date = sourceData.dataDate;
     }
     
+    // 添加預報小時數到 projection 物件內（預設為 0）
+    result.projection.fcst = sourceData.forecastHour !== null && sourceData.forecastHour !== undefined 
+      ? sourceData.forecastHour 
+      : 0;
+    
     // 然後添加基本網格資訊
     result.nx = grid.nx;
     result.ny = grid.ny;
