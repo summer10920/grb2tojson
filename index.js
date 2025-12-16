@@ -12,22 +12,58 @@ const __dirname = path.dirname(__filename);
 // 定義目錄路徑
 const grb2Dir = path.join(__dirname, 'grb2');
 const jsonDir = path.join(__dirname, 'json');
+const tempDir = path.join(__dirname, 'temp');
 
-// 確保 json 目錄存在
+// 確保目錄存在
 if (!fs.existsSync(jsonDir)) {
   fs.mkdirSync(jsonDir, { recursive: true });
   console.log(`已建立輸出目錄：${jsonDir}`);
 }
 
-// 檢查 grb2 目錄是否存在
-if (!fs.existsSync(grb2Dir)) {
-  console.error(`錯誤：找不到 grb2 目錄：${grb2Dir}`);
-  console.log('請先建立 grb2 目錄並將 .grb2 檔案放入其中');
-  process.exit(1);
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir, { recursive: true });
 }
 
-// 取得所有 .grb2 檔案
+// 生成預報小時數列表（000, 006, 012, ..., 084）
+function generateForecastHours() {
+  const hours = [];
+  for (let i = 0; i <= 84; i += 6) {
+    hours.push(String(i).padStart(3, '0'));
+  }
+  return hours;
+}
+
+// 生成下載 URL
+function generateDownloadUrl(num) {
+  return `https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Model/M-A0061-${num}.grb2`;
+}
+
+// 下載檔案
+async function downloadFile(url, outputPath) {
+  try {
+    console.log(`  正在下載：${path.basename(outputPath)}`);
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    fs.writeFileSync(outputPath, buffer);
+    console.log(`  ✓ 下載完成：${path.basename(outputPath)}`);
+    return true;
+  } catch (error) {
+    console.error(`  ✗ 下載失敗：${error.message}`);
+    return false;
+  }
+}
+
+// 取得所有 .grb2 檔案（從本地目錄，作為備用）
 function getGrb2Files(dir) {
+  if (!fs.existsSync(dir)) {
+    return [];
+  }
   const files = fs.readdirSync(dir);
   return files
     .filter(file => file.toLowerCase().endsWith('.grb2'))
@@ -77,24 +113,57 @@ async function processFile(inputFile) {
 
 async function main() {
   try {
-    // 取得所有 .grb2 檔案
-    const grb2Files = getGrb2Files(grb2Dir);
+    // 生成所有需要下載的檔案 URL
+    const forecastHours = generateForecastHours();
+    console.log(`準備下載 ${forecastHours.length} 個 GRIB2 檔案...\n`);
     
-    if (grb2Files.length === 0) {
-      console.log(`在 ${grb2Dir} 目錄中找不到任何 .grb2 檔案`);
-      process.exit(0);
+    // 下載所有檔案到臨時目錄
+    const downloadedFiles = [];
+    let downloadSuccessCount = 0;
+    let downloadFailCount = 0;
+    
+    for (const hour of forecastHours) {
+      const url = generateDownloadUrl(hour);
+      const fileName = `M-A0061-${hour}.grb2`;
+      const tempFilePath = path.join(tempDir, fileName);
+      
+      const success = await downloadFile(url, tempFilePath);
+      if (success) {
+        downloadedFiles.push(tempFilePath);
+        downloadSuccessCount++;
+      } else {
+        downloadFailCount++;
+      }
     }
     
-    console.log(`找到 ${grb2Files.length} 個 GRIB2 檔案，開始批次處理...\n`);
+    console.log(`\n下載完成！`);
+    console.log(`  成功：${downloadSuccessCount} 個檔案`);
+    if (downloadFailCount > 0) {
+      console.log(`  失敗：${downloadFailCount} 個檔案`);
+    }
     
-    // 批次處理所有檔案
+    if (downloadedFiles.length === 0) {
+      console.log('\n沒有成功下載任何檔案，無法繼續處理');
+      process.exit(1);
+    }
+    
+    console.log(`\n開始處理 ${downloadedFiles.length} 個 GRIB2 檔案...\n`);
+    
+    // 批次處理所有下載的檔案
     let successCount = 0;
     let failCount = 0;
     
-    for (const file of grb2Files) {
+    for (const file of downloadedFiles) {
       try {
         await processFile(file);
         successCount++;
+        
+        // 處理完成後刪除臨時檔案
+        try {
+          fs.unlinkSync(file);
+        } catch (error) {
+          console.warn(`  警告：無法刪除臨時檔案 ${file}`);
+        }
       } catch (error) {
         failCount++;
         // 繼續處理下一個檔案

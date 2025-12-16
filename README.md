@@ -2,38 +2,32 @@
 
 將中央氣象局（CWA）提供的 GRIB2 格式風場資料轉換為 JSON 格式的工具。
 
-**注意：** 目前工具僅測試支援 WRF3km 資料（Lambert Conformal 投影）。
+**注意：** 目前工具僅測試支援 WRF15km 資料（Lambert Conformal 投影）。
 
 ## 功能
 
-- 將 `.grb2` 檔案解析為完整的 JSON 資料（`source.json`）
-- 轉換為 maplibre-wind 套件可用的格式（`wind.json`）
+- **自動下載 GRIB2 檔案**：從中央氣象局 S3 儲存庫自動下載風場資料（M-A0061 系列，預報小時數 000-084）
+- 將 `.grb2` 檔案解析為完整的 JSON 資料（例如：`M-A0061-000.json`）
+- 轉換為 maplibre-wind 套件可用的格式（例如：`wind-2025121518-000.json`）
 
-## 取得 GRIB2 檔案
+## 資料來源
 
-**重要：** 由於 GRIB2 檔案體積較大（通常數百 MB），本專案**不包含**範例檔案。請從以下來源下載：
+程式會自動從以下網址下載 GRIB2 檔案：
 
-### 中央氣象局開放資料平台
-
-**風場資料（M-A0064-084）：**
-- 資料集網址：https://opendata.cwa.gov.tw/dataset/mathematics/M-A0064-084
+**中央氣象局開放資料 S3 儲存庫：**
+- 基礎 URL：`https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Model/M-A0061-[num].grb2`
+- 預報小時數：000, 006, 012, 018, 024, 030, 036, 042, 048, 054, 060, 066, 072, 078, 084（共 15 個檔案）
 - 說明：此資料集包含數值天氣預報模式的風場資料
 - 格式：GRIB2（.grb2 副檔名）
-
-**下載步驟：**
-1. 前往 [中央氣象局開放資料平台](https://opendata.cwa.gov.tw/dataset/mathematics/M-A0064-084)
-2. 選擇需要的資料檔案（通常以日期和預報時段命名，例如：`M-A0064-084.grb2`）
-3. 下載檔案到本專案目錄
-4. 使用本工具進行轉換
 
 **注意：**
 - 檔案大小通常為數百 MB，下載可能需要一些時間
 - 確保有足夠的磁碟空間（轉換後的 JSON 檔案可能更大）
-- 檔案命名可能因資料版本而異，請確認副檔名為 `.grb2`
+- 下載的檔案會暫存在 `temp` 目錄，處理完成後會自動刪除
 
 ## 需求
 
-- Node.js (建議 v14 或以上)
+- **Node.js v18 或以上**（需要內建的 `fetch` API 用於下載檔案）
 - `wgrib2` 工具（用於解析 GRIB2 檔案）
 
 ### 安裝 wgrib2
@@ -58,9 +52,9 @@ sudo yum install wgrib2
 
 ## 使用方法
 
-### 基本用法（批次處理）
+### 基本用法（自動下載與轉換）
 
-程式會自動搜尋 `grb2` 目錄內所有的 `.grb2` 檔案並批次處理，輸出到 `json` 目錄。
+程式會自動從網路下載 GRIB2 檔案，並批次處理轉換為 JSON 格式，輸出到 `json` 目錄。
 
 ```bash
 node index.js
@@ -68,30 +62,25 @@ node index.js
 
 ### 執行步驟
 
-1. **準備 GRIB2 檔案**
-   - 從 [中央氣象局開放資料平台](https://opendata.cwa.gov.tw/dataset/mathematics/M-A0064-084) 下載 GRIB2 檔案
-   - 將下載的 `.grb2` 檔案放入專案根目錄下的 `grb2` 目錄中
-
-2. **執行轉換**
+1. **執行轉換**
    ```bash
    node index.js
    ```
+   - 程式會自動下載 15 個 GRIB2 檔案（預報小時數 000-084）
+   - 下載完成後自動進行轉換
 
-3. **取得結果**
+2. **取得結果**
    - 所有轉換後的 JSON 檔案會自動輸出到 `json` 目錄
    - 每個 GRIB2 檔案會產生兩個 JSON 檔案：
-     - `<來源檔名>.json` - 完整的原始解析資料（約數百 MB），檔名與來源 GRIB2 檔案同名（例如：`M-A0064-000.json`）
+     - `<來源檔名>.json` - 完整的原始解析資料（約數百 MB），檔名與來源 GRIB2 檔案同名（例如：`M-A0061-000.json`）
      - `wind-YYYYMMDDHH-fcst.json` - maplibre-wind 可用的格式（約數百 MB），檔案名稱會自動包含資料日期（含小時）和預報小時數（三位數格式，例如：`wind-2025112418-000.json` 或 `wind-2025112418-084.json`）
 
 **目錄結構：**
 ```
 grb2tojson/
-├── grb2/              # 放置 .grb2 檔案的目錄
-│   ├── M-A0064-000.grb2
-│   ├── M-A0064-084.grb2
-│   └── ...
+├── temp/              # 臨時下載目錄（自動建立，處理完成後會自動清理）
 ├── json/              # 輸出 JSON 檔案的目錄（自動建立）
-│   ├── M-A0064-000.json
+│   ├── M-A0061-000.json
 │   ├── wind-2025112418-000.json
 │   └── ...
 └── index.js
@@ -99,21 +88,32 @@ grb2tojson/
 
 ### 執行過程說明
 
-1. **檢查目錄**：程式會檢查 `grb2` 目錄是否存在，並自動建立 `json` 輸出目錄
-2. **搜尋檔案**：自動搜尋 `grb2` 目錄內所有的 `.grb2` 檔案
-3. **批次處理**：依序處理每個 GRIB2 檔案：
-   - 檢查 wgrib2 工具是否安裝
+1. **下載檔案**：程式會自動從中央氣象局 S3 儲存庫下載 15 個 GRIB2 檔案（預報小時數 000-084）
+2. **檢查工具**：檢查 `wgrib2` 工具是否安裝
+3. **批次處理**：依序處理每個下載的 GRIB2 檔案：
    - 解析網格資訊：提取網格大小、投影類型、起始位置等資訊
    - 列出所有記錄：顯示 GRIB2 檔案中包含的所有資料記錄
    - 提取風速分量：自動尋找並提取 U 和 V 風速分量（優先提取 10 m above ground 的地面風速）
    - 生成 JSON 檔案：輸出到 `json` 目錄
+   - 清理臨時檔案：處理完成後自動刪除臨時下載的檔案
 
 ### 執行輸出範例
 
 ```
-找到 15 個 GRIB2 檔案，開始批次處理...
+準備下載 15 個 GRIB2 檔案...
 
-正在處理：M-A0064-000.grb2
+  正在下載：M-A0061-000.grb2
+  ✓ 下載完成：M-A0061-000.grb2
+  正在下載：M-A0061-006.grb2
+  ✓ 下載完成：M-A0061-006.grb2
+  ...
+
+下載完成！
+  成功：15 個檔案
+
+開始處理 15 個 GRIB2 檔案...
+
+正在處理：M-A0061-000.grb2
 使用 wgrib2 解析 GRIB2 檔案...
 取得網格資訊...
 網格資訊： { nx: 1158, ny: 673, projection: 'lambert-conformal', ... }
@@ -124,12 +124,12 @@ grb2tojson/
 找到 10m 高度的 V 分量記錄：68:155100086:d=2025112418:VGRD:10 m above ground:anl:
 找到 U 分量記錄：67，資料點數：779334
 找到 V 分量記錄：68，資料點數：779334
-  ✓ 已生成 M-A0064-000.json
+  ✓ 已生成 M-A0061-000.json
   ✓ 已生成 wind-2025112418-000.json
 
-正在處理：M-A0064-084.grb2
+正在處理：M-A0061-084.grb2
 ...
-  ✓ 已生成 M-A0064-084.json
+  ✓ 已生成 M-A0061-084.json
   ✓ 已生成 wind-2025112418-084.json
 
 批次處理完成！
@@ -139,35 +139,48 @@ grb2tojson/
 
 ## 輸出檔案
 
-執行後會產生兩個 JSON 檔案：
+**重要說明：**
 
-### source.json
-完整的原始解析資料，包含：
+`M-A0061-[num].json` **不代表 GRIB2 檔案的完整內容**。它是從 GRIB2 檔案中**摘要出來的資訊**，預設採用 **10 m above ground**（地面 10 公尺高度）的風速資料。GRIB2 檔案通常包含多個高度層級的資料（例如：100 mb、850 mb、10 m above ground 等），但程式會優先提取地面風速資料，因為這是最常用於可視化的資料。
+
+`wind-[date]-[num].json` 則是進一步**簡化（閹割）的版本**，只保留前端 `@sakitam-gis/maplibre-wind` 套件所需的必要欄位，移除了所有 metadata 和詳細資訊，以減少檔案大小並提高載入速度。
+
+執行後每個 GRIB2 檔案會產生兩個 JSON 檔案：
+
+### M-A0061-[num].json（完整的原始解析資料）
+檔名格式：`M-A0061-[num].json`（例如：`M-A0061-000.json`、`M-A0061-084.json`）
+
+包含完整的原始解析資料：
 - 網格資訊（nx, ny, dx, dy, lo1, la1）
-- 所有記錄列表
-- U 和 V 風速分量資料
+- 所有記錄列表（`recordsList`）
+- U 和 V 風速分量資料（`windComponents`）
+  - **預設優先採用**：`10 m above ground`（地面 10 公尺高度）的風速資料
+  - **備用方案**：如果 GRIB2 檔案中沒有 `10 m above ground` 的記錄，程式會自動尋找其他高度的 UGRD/VGRD 記錄（例如：`100 mb`、`850 mb` 等）
+  - **注意**：`windComponents` 物件中只包含 `u` 和 `v` 陣列，不包含高度資訊。如需確認實際使用的高度，請檢查 `recordsList` 中對應的記錄
 - 完整的 metadata
 
-### wind.json
+### wind-[date]-[num].json（maplibre-wind 可用格式）
+檔名格式：`wind-YYYYMMDDHH-[num].json`（例如：`wind-2025121518-000.json`、`wind-2025121518-084.json`）
+
 轉換為 `@sakitam-gis/maplibre-wind` 套件可用的格式。
 
-**對於 WRF3km 資料（Lambert Conformal 投影）：**
+**對於 WRF15km 資料（Lambert Conformal 投影，對應 M-A0061-000.json 範例）：**
 ```json
 {
   "projection": {
     "type": "lambert-conformal",
-    "lo1": 105.25,
-    "la1": 14.02224,
+    "lo1": 78.02554,
+    "la1": -5.693677,
     "lov": 120.0,
     "latin1": 10.0,
     "latin2": 40.0,
-    "dx": 3000.0,
-    "dy": 3000.0,
-    "date": "2025112418",
+    "dx": 15000.0,
+    "dy": 15000.0,
+    "date": "2025121518",
     "fcst": 0
   },
-  "nx": 1158,
-  "ny": 673,
+  "nx": 661,
+  "ny": 385,
   "u": [1.2, 2.3, ...],
   "v": [0.5, 1.1, ...]
 }
@@ -189,71 +202,69 @@ grb2tojson/
 
 #### 參數提取說明
 
-`wind.json` 中的每個參數都是從 GRIB2 檔案中提取並轉換而來：
+`wind-[date]-[num].json` 中的每個參數都是從 `M-A0061-[num].json` 的 `grid` 物件中直接取得：
 
-**網格參數（從 `wgrib2 -grid` 輸出解析）：**
+**網格參數（從 `M-A0061-[num].json` 的 `grid` 物件取得）：**
 
 1. **`nx`** - X 方向的網格點數
-   - 來源：從 `wgrib2 -grid` 輸出的網格資訊中解析
-   - 格式範例：`Lambert Conformal: (1158 x 673)` → `nx = 1158`
-   - 對於 lat-lon 網格：從 `lat-lon grid:(361 x 181)` 中提取
+   - 來源：`sourceData.grid.nx`
+   - 範例：`661`
 
 2. **`ny`** - Y 方向的網格點數
-   - 來源：同上，從網格資訊中解析
-   - 格式範例：`Lambert Conformal: (1158 x 673)` → `ny = 673`
+   - 來源：`sourceData.grid.ny`
+   - 範例：`385`
 
 3. **`lo1`** - 起始經度（度）
-   - 來源：從網格資訊中解析
-   - lat-lon 網格：從 `lon 0.000000 to 359.000000` 中提取起始值
-   - Lambert Conformal：從 `Lon1 105.250000` 中提取
+   - 來源：`sourceData.grid.lo1`
+   - 範例：`78.02554`
 
 4. **`la1`** - 起始緯度（度）
-   - 來源：從網格資訊中解析
-   - lat-lon 網格：從 `lat 90.000000 to -90.000000` 中提取起始值
-   - Lambert Conformal：從 `Lat1 14.022240` 中提取
+   - 來源：`sourceData.grid.la1`
+   - 範例：`-5.693677`
 
 5. **`dx`** - X 方向的網格間距
-   - lat-lon 網格：計算公式 `dx = (lo2 - lo1) / (nx - 1)`（單位：度）
-   - Lambert Conformal：從 `Dx 3000.000000 m` 中提取，保留為米（不轉換為度）
+   - 來源：`sourceData.grid.dx`
+   - lat-lon 網格：單位為度
+   - Lambert Conformal：單位為米（例如：`15000.0`）
 
 6. **`dy`** - Y 方向的網格間距
-   - lat-lon 網格：計算公式 `dy = |la1 - la2| / (ny - 1)`（單位：度）
-   - Lambert Conformal：從 `Dy 3000.000000 m` 中提取，保留為米（不轉換為度）
+   - 來源：`sourceData.grid.dy`
+   - lat-lon 網格：單位為度
+   - Lambert Conformal：單位為米（例如：`15000.0`）
 
-**Lambert Conformal 投影參數（僅適用於 WRF3km 資料）：**
+**Lambert Conformal 投影參數（適用於 WRF15km 等 Lambert Conformal 投影資料）：**
 
 7. **`projection.type`** - 投影類型
    - 固定為 `"lambert-conformal"`
 
 8. **`projection.lov`** - 中央子午線（度）
-   - 來源：從 `gridInfo` 中解析 `LoV 120.000000`
+   - 來源：`sourceData.grid.lov`
    - 範例：`120.0`
 
 9. **`projection.latin1`** - 第一標準緯線（度）
-   - 來源：從 `gridInfo` 中解析 `Latin1 10.000000`
+   - 來源：`sourceData.grid.latin1`
    - 範例：`10.0`
 
 10. **`projection.latin2`** - 第二標準緯線（度）
-    - 來源：從 `gridInfo` 中解析 `Latin2 40.000000`
+    - 來源：`sourceData.grid.latin2`
     - 範例：`40.0`
 
 11. **`projection.dx`** - X 方向的網格間距（米）
-    - 來源：從 `gridInfo` 中解析 `Dx 3000.000000 m`
-    - 範例：`3000.0`（保留原始單位，不轉換為度）
+    - 來源：`sourceData.grid.dx`
+    - 範例：`15000.0`（保留原始單位，不轉換為度）
 
 12. **`projection.dy`** - Y 方向的網格間距（米）
-    - 來源：從 `gridInfo` 中解析 `Dy 3000.000000 m`
-    - 範例：`3000.0`（保留原始單位，不轉換為度）
+    - 來源：`sourceData.grid.dy`
+    - 範例：`15000.0`（保留原始單位，不轉換為度）
 
 13. **`projection.date`** - 資料日期（YYYYMMDDHH 格式）
-    - 來源：從 GRIB2 檔案的記錄中解析（格式：`d=2025112418`）
-    - 範例：`"2025112418"`（表示 2025 年 11 月 24 日 18 點）
+    - 來源：`sourceData.dataDate`
+    - 範例：`"2025121518"`（表示 2025 年 12 月 15 日 18 點）
 
 14. **`projection.fcst`** - 預報小時數（整數）
-    - 來源：從 `recordsList` 或 `records.records` 中的記錄字串解析取得
+    - 來源：`sourceData.forecastHour`（如果不存在則預設為 `0`）
     - 說明：表示該筆資料是基準時間後第幾小時的預報風向
-    - 解析方式：從記錄字串中解析預報小時數（例如：`84 hour fcst` 表示 `fcst` 為 84）
-    - 預設值：如果沒有找到 `hour fcst`（例如：`anl:` 表示分析資料），則設為 `0`
+    - 預設值：如果沒有找到預報小時數（例如：`anl:` 表示分析資料），則設為 `0`
     - 範例：`84` 表示這是基準時間後 84 小時的預報資料，`0` 表示這是分析資料（非預報）
 
 **風速資料（從 GRIB2 檔案中的風速記錄提取）：**
@@ -267,9 +278,26 @@ grb2tojson/
    - **單位**：m/s（公尺/秒）
    
    **提取方式：**
-   - 從 GRIB2 檔案中尋找標記為 `UGRD`（U-component of wind）的資料記錄
-   - 程式會優先尋找 `10 m above ground`（地面 10 公尺高度）的風速資料
-   - 如果找不到，會自動尋找其他高度的 UGRD 記錄
+   
+   程式使用以下步驟提取 10 m above ground 的風速資料：
+   
+   1. **列出所有記錄**：使用 `wgrib2 -s` 命令列出 GRIB2 檔案中的所有資料記錄
+      - 輸出格式範例：`67:49891492:d=2025121518:UGRD:10 m above ground:anl:`
+      - 記錄格式：`[記錄編號]:[資料大小]:[日期]:[參數名稱]:[高度層級]:[預報類型]:`
+   
+   2. **識別目標記錄**：從記錄列表中搜尋包含以下關鍵字的記錄：
+      - `:UGRD:10 m above ground` 或 `:UGRD:10m above ground`
+      - 這表示該記錄是地面 10 公尺高度的 U 分量風速
+   
+   3. **提取記錄編號**：從記錄字串中提取記錄編號（例如：`67`）
+      - 範例記錄：`67:49891492:d=2025121518:UGRD:10 m above ground:anl:`
+      - 記錄編號：`67`
+   
+   4. **提取數值資料**：使用 `wgrib2 -d 67 -csv -` 命令提取該記錄的實際數值
+      - 輸出格式：CSV（經度,緯度,數值）
+      - 只提取數值部分，組成 `u` 陣列
+   
+   5. **備用方案**：如果找不到 `10 m above ground` 的記錄，程式會自動尋找其他高度的 UGRD 記錄（例如：`100 mb`、`850 mb` 等）
    
    **資料結構：**
    - 每個數值對應網格上的一個點
@@ -292,9 +320,18 @@ grb2tojson/
    - **單位**：m/s（公尺/秒）
    
    **提取方式：**
-   - 從 GRIB2 檔案中尋找標記為 `VGRD`（V-component of wind）的資料記錄
-   - 同樣優先尋找 `10 m above ground` 的地面風速
-   - 提取流程與 `u` 完全相同
+   
+   提取流程與 `u` 完全相同，但搜尋的是 `VGRD`（V-component of wind）記錄：
+   
+   1. **列出所有記錄**：使用 `wgrib2 -s` 命令列出所有記錄
+   
+   2. **識別目標記錄**：搜尋包含 `:VGRD:10 m above ground` 的記錄
+      - 範例記錄：`68:50655135:d=2025121518:VGRD:10 m above ground:anl:`
+      - 記錄編號：`68`
+   
+   3. **提取數值資料**：使用 `wgrib2 -d 68 -csv -` 提取 V 分量數值
+   
+   4. **備用方案**：如果找不到 `10 m above ground`，會自動尋找其他高度的 VGRD 記錄
    
    **資料結構：**
    - 與 `u` 陣列對應，每個位置的值代表該網格點的南北向風速
@@ -333,33 +370,48 @@ U 和 V 分量可以組合成實際的風速和風向：
 **提取流程圖：**
 
 ```
-GRIB2 檔案
+GRIB2 檔案（例如：M-A0061-000.grb2）
     ↓
-[wgrib2 -grid] → 解析網格資訊 → nx, ny, lo1, la1, dx, dy
+[wgrib2 -grid] → 解析網格資訊 → M-A0061-000.json 的 grid 物件
     ↓
 [wgrib2 -s] → 列出所有記錄 → 尋找 UGRD/VGRD 記錄編號
     ↓
-[wgrib2 -d <record> -text] → 提取資料值 → u[], v[]
+[wgrib2 -d <record> -csv] → 提取資料值 → M-A0061-000.json 的 windComponents
     ↓
-轉換為 wind.json 格式
+從 M-A0061-000.json 的 grid 和 windComponents 提取 → wind-2025121518-000.json 格式
 ```
 
 **技術細節：**
 
 - **網格解析**：支援兩種投影格式
   - **lat-lon 網格**：標準經緯度網格，直接從範圍計算間距（單位：度）
-  - **Lambert Conformal**：Lambert 圓錐投影（WRF3km 使用）
+  - **Lambert Conformal**：Lambert 圓錐投影（WRF15km 使用）
     - 保留網格間距為米（`dx`、`dy` 以米為單位）
     - 提取完整的投影參數：`lov`（中央子午線）、`latin1`、`latin2`（標準緯線）
     - 前端可使用 proj4js 等投影庫進行精確的座標轉換
+  - 所有網格參數已解析並儲存在 `M-A0061-[num].json` 的 `grid` 物件中，轉換時直接從該物件取得
 
 - **風速資料提取**：
-  - 優先提取 `10 m above ground` 的地面風速（最常用於可視化）
-  - 如果找不到，會尋找其他高度的 UGRD/VGRD 記錄
-  - 資料按網格順序排列：從左上角開始，先 X 方向（經度），後 Y 方向（緯度）
+  - **步驟 1**：使用 `wgrib2 -s` 列出所有記錄，輸出格式為：
+    ```
+    67:49891492:d=2025121518:UGRD:10 m above ground:anl:
+    68:50655135:d=2025121518:VGRD:10 m above ground:anl:
+    ```
+  - **步驟 2**：從記錄字串中搜尋包含 `:UGRD:10 m above ground` 或 `:VGRD:10 m above ground` 的記錄
+  - **步驟 3**：提取記錄編號（例如：`67` 和 `68`）
+  - **步驟 4**：使用 `wgrib2 -d 67 -csv -` 和 `wgrib2 -d 68 -csv -` 提取實際數值資料
+  - **優先順序**：優先提取 `10 m above ground` 的地面風速（最常用於可視化）
+  - **備用方案**：如果找不到 `10 m above ground`，會自動尋找其他高度的 UGRD/VGRD 記錄（例如：`100 mb`、`850 mb` 等）
+  - **資料順序**：資料按網格順序排列，從左上角開始，先 X 方向（經度），後 Y 方向（緯度）
+  - **儲存位置**：風速資料儲存在 `M-A0061-[num].json` 的 `windComponents` 物件中（`windComponents.u` 和 `windComponents.v`）
+  - **高度選擇邏輯**：
+    - **優先採用**：程式會優先尋找並提取 `10 m above ground`（地面 10 公尺高度）的風速資料
+    - **備用方案**：如果 GRIB2 檔案中沒有 `10 m above ground` 的記錄，程式會自動尋找其他高度的 UGRD/VGRD 記錄
+    - **注意**：`windComponents` 物件中不包含高度資訊，如需確認實際使用的高度層級，請檢查執行時的 console 輸出或 `recordsList` 中對應的記錄
 
 - **資料轉換**：
-  - 所有參數從 `source.json` 的 `grid` 和 `windComponents` 欄位提取
+  - 所有網格參數直接從 `M-A0061-[num].json` 的 `grid` 物件取得（無需從 `gridInfo` 字串解析）
+  - 風速資料從 `M-A0061-[num].json` 的 `windComponents` 欄位提取
   - 如果 `windComponents` 沒有資料，會嘗試從 `records` 陣列中尋找
 
 ## 專案結構
@@ -367,10 +419,12 @@ GRIB2 檔案
 ```
 grb2tojson/
 ├── package.json          # Node.js 專案配置
-├── index.js              # CLI 主程式
+├── index.js              # CLI 主程式（包含自動下載功能）
 ├── src/
 │   ├── parser.js         # GRIB2 解析邏輯
-│   └── converter.js      # 轉換為 wind.json 的邏輯
+│   └── converter.js      # 轉換為 wind-[date]-[num].json 的邏輯
+├── temp/                 # 臨時下載目錄（自動建立，處理完成後會自動清理）
+├── json/                 # 輸出 JSON 檔案的目錄（自動建立）
 └── README.md             # 本文件
 ```
 
@@ -381,53 +435,39 @@ grb2tojson/
 **Q: 執行時出現 "未找到 wgrib2 工具" 錯誤**
 - A: 請先安裝 wgrib2，參考上方的「安裝 wgrib2」章節
 
-**Q: 轉換後 wind.json 缺少某些欄位**
-- A: 請檢查 `source.json` 中的 `windComponents` 是否包含 U 和 V 資料。如果沒有，可能是 GRIB2 檔案中沒有對應的風速記錄
+**Q: 執行時出現 "fetch is not defined" 或類似錯誤**
+- A: 請確認您的 Node.js 版本為 v18 或以上。可以使用 `node --version` 檢查版本，如果版本過舊，請升級 Node.js
+
+**Q: 下載失敗或網路錯誤**
+- A: 請檢查網路連線，並確認可以存取 `https://cwaopendata.s3.ap-northeast-1.amazonaws.com`。如果某些檔案下載失敗，程式會繼續處理其他成功下載的檔案
+
+**Q: 轉換後 wind-[date]-[num].json 缺少某些欄位**
+- A: 請檢查 `M-A0061-[num].json` 中的 `windComponents` 是否包含 U 和 V 資料。如果沒有，可能是 GRIB2 檔案中沒有對應的風速記錄
 
 **Q: 資料點數不正確**
 - A: 確認 GRIB2 檔案的網格格式是否為標準格式。目前支援 lat-lon 和 Lambert Conformal 投影
 
 **Q: 如何確認轉換是否成功**
-- A: 檢查終端輸出是否顯示「✓ 已生成 source.json」和「✓ 已生成 wind.json」，並確認檔案大小合理（不為 0）
+- A: 檢查終端輸出是否顯示「✓ 下載完成」和「✓ 已生成」訊息，並確認 `json` 目錄中的檔案大小合理（不為 0）
 
 ## 注意事項
 
 ### 檔案管理
 
-- **GRIB2 檔案**：請從 [中央氣象局開放資料平台](https://opendata.cwa.gov.tw/dataset/mathematics/M-A0064-084) 下載，本專案不包含範例檔案
-- **JSON 檔案大小**：轉換後的 `source.json` 和 `wind.json` 通常為數百 MB，請確保有足夠的磁碟空間
-- **Git 版本控制**：建議將大型 JSON 檔案加入 `.gitignore`，避免 push 到 GitHub
+- **GRIB2 檔案**：程式會自動從網路下載，無需手動準備。下載的檔案會暫存在 `temp` 目錄，處理完成後會自動刪除
+- **JSON 檔案大小**：轉換後的 `M-A0061-[num].json` 和 `wind-[date]-[num].json` 通常為數百 MB，請確保有足夠的磁碟空間
+- **Git 版本控制**：建議將大型 JSON 檔案和 `temp` 目錄加入 `.gitignore`，避免 push 到 GitHub
 
 ### 執行環境
 
 - 確保系統已安裝 `wgrib2` 工具
-- 大型 GRIB2 檔案轉換可能需要一些時間（數分鐘），請耐心等待
-- 轉換過程中會使用臨時檔案，請確保 `/tmp` 目錄有寫入權限
+- 確保 Node.js 版本為 v18 或以上（需要 `fetch` API）
+- 確保網路連線正常，可以存取中央氣象局 S3 儲存庫
+- 大型 GRIB2 檔案下載和轉換可能需要一些時間（數十分鐘），請耐心等待
+- 轉換過程中會使用臨時檔案，請確保 `temp` 目錄有寫入權限
 
 ### 資料驗證
 
-- 如果轉換過程中出現警告，請檢查 `source.json` 以了解資料結構
-- `wind.json` 必須包含所有必要欄位才能在 maplibre-wind 中正常使用
-- 轉換完成後，建議檢查 `wind.json` 中的 `u` 和 `v` 陣列長度是否等於 `nx × ny`
-
-### .gitignore 設定
-
-專案已包含 `.gitignore` 檔案，會自動忽略大型檔案。
-
-**如果第一次 commit 已經包含大型檔案：**
-
-如果您的 Git 倉庫第一次 commit 已經包含了 `.grb2`、`source.json` 或 `wind.json` 檔案，需要先從 Git 索引中移除它們：
-
-```bash
-# 從 Git 索引中移除檔案（保留本地檔案）
-git rm --cached M-A0064-084.grb2
-git rm --cached source.json
-git rm --cached wind.json
-
-# 提交變更
-git add .gitignore
-git commit -m "chore: 移除大型檔案並更新 .gitignore"
-```
-
-**注意：** 如果檔案已經 push 到遠端，可能需要清理 Git 歷史。詳細說明請參考 `REMOVE_LARGE_FILES.md`。
-
+- 如果轉換過程中出現警告，請檢查 `M-A0061-[num].json` 以了解資料結構
+- `wind-[date]-[num].json` 必須包含所有必要欄位才能在 maplibre-wind 中正常使用
+- 轉換完成後，建議檢查 `wind-[date]-[num].json` 中的 `u` 和 `v` 陣列長度是否等於 `nx × ny`

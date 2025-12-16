@@ -4,7 +4,7 @@
 # 轉換後的 JSON 檔案（體積太大）
 source.json
 wind.json
-M-A0064-*.json
+M-A*.json
 wind-*.json
 
 # 臨時檔案
